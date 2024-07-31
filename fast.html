@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometry Dash & Flappy Bird Mix</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; }
+        canvas { display: block; background: #87CEEB; }
+
+        /* Animation for changing background colors */
+        @keyframes changeColors {
+            0% { background-color: #87CEEB; }
+            25% { background-color: #FF6347; }
+            50% { background-color: #32CD32; }
+            75% { background-color: #FFD700; }
+            100% { background-color: #87CEEB; }
+        }
+        .change-colors {
+            animation: changeColors 15s linear infinite;
+        }
+
+        /* Score text styling */
+        .score {
+            font-size: 20px;
+            font-family: 'Arial', sans-serif;
+            color: black;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" class="change-colors"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Game variables
+        const GRAVITY = 0.75; // Increased gravity
+        const JUMP_STRENGTH = -15; // Adjusted jump strength
+        const OBSTACLE_WIDTH = 40;
+        const OBSTACLE_HEIGHT = 100; // Reduced height
+        const OBSTACLE_SPACING = 400; // Increased spacing
+        const OBSTACLE_ROTATION_SPEED = 0.02; // Further slowed rotation speed
+        const MOVEMENT_SPEED = 30; // Further slowed speed
+        const BOUNDARY_HEIGHT = 50;
+
+        let player = {
+            x: 50,
+            y: canvas.height / 2,
+            width: 30,
+            height: 30,
+            velocityY: 0,
+            isJumping: false
+        };
+
+        let obstacles = [];
+        let topBoundary = { x: 0, y: 0, width: canvas.width, height: BOUNDARY_HEIGHT };
+        let bottomBoundary = { x: 0, y: canvas.height - BOUNDARY_HEIGHT, width: canvas.width, height: BOUNDARY_HEIGHT };
+        let score = 0;
+        let bestScore = localStorage.getItem('bestScore') || 0;
+        let isGameOver = false;
+
+        function createObstacle() {
+            const height = Math.random() * (canvas.height - OBSTACLE_HEIGHT - BOUNDARY_HEIGHT * 2) + BOUNDARY_HEIGHT;
+            obstacles.push({
+                x: canvas.width,
+                y: height,
+                width: OBSTACLE_WIDTH,
+                height: OBSTACLE_HEIGHT,
+                rotation: Math.random() * 0.4 - 0.2
+            });
+        }
+
+        function resetGame() {
+            player.y = canvas.height / 2;
+            player.velocityY = 0;
+            player.isJumping = false;
+            obstacles = [];
+            score = 0;
+            isGameOver = false;
+            topBoundary.y = 0;
+            bottomBoundary.y = canvas.height - BOUNDARY_HEIGHT;
+        }
+
+        function getColorForScore(score) {
+            const hue = (score * 30) % 360;
+            return `hsl(${hue}, 70%, 50%)`;
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            // Gravity effect
+            player.velocityY += GRAVITY;
+            player.y += player.velocityY;
+
+            // Check collision with top and bottom boundaries
+            if (player.y < topBoundary.y + topBoundary.height || player.y + player.height > bottomBoundary.y) {
+                isGameOver = true;
+                if (score > bestScore) {
+                    bestScore = score;
+                    localStorage.setItem('bestScore', bestScore);
+                }
+                setTimeout(resetGame, 500); // Reduced delay before restarting
+                return;
+            }
+
+            // Move obstacles and rotate them
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= MOVEMENT_SPEED; // Adjusted speed for smoother gameplay
+                obstacles[i].rotation += OBSTACLE_ROTATION_SPEED;
+                if (obstacles[i].x + OBSTACLE_WIDTH < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                }
+            }
+
+            // Add new obstacles
+            if (obstacles.length === 0 || obstacles[obstacles.length - 1].x < canvas.width - OBSTACLE_SPACING) {
+                createObstacle();
+            }
+
+            // Check collisions
+            for (const obstacle of obstacles) {
+                if (
+                    player.x < obstacle.x + obstacle.width &&
+                    player.x + player.width > obstacle.x &&
+                    player.y < obstacle.y + obstacle.height &&
+                    player.y + player.height > obstacle.y
+                ) {
+                    isGameOver = true;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        localStorage.setItem('bestScore', bestScore);
+                    }
+                    setTimeout(resetGame, 500); // Reduced delay before restarting
+                    return;
+                }
+            }
+
+            // Draw everything
+            draw();
+        }
+
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player with dynamic color and smooth scaling effect
+            ctx.fillStyle = getColorForScore(score);
+            ctx.save();
+            ctx.translate(player.x + player.width / 2, player.y + player.height / 2);
+            ctx.scale(1.05, 1.05); // Slightly larger scale for more impact
+            ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
+            ctx.restore();
+
+            // Draw obstacles with smooth rotation
+            ctx.fillStyle = 'black';
+            for (const obstacle of obstacles) {
+                ctx.save();
+                ctx.translate(obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
+                ctx.rotate(obstacle.rotation);
+                ctx.fillRect(-obstacle.width / 2, -obstacle.height / 2, obstacle.width, obstacle.height);
+                ctx.restore();
+            }
+
+            // Draw boundaries with smooth gradient effect
+            const gradientTop = ctx.createLinearGradient(0, topBoundary.y, 0, topBoundary.y + topBoundary.height);
+            gradientTop.addColorStop(0, 'rgba(0, 0, 0, 0.4)');
+            gradientTop.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = gradientTop;
+            ctx.fillRect(topBoundary.x, topBoundary.y, topBoundary.width, topBoundary.height);
+
+            const gradientBottom = ctx.createLinearGradient(0, bottomBoundary.y, 0, bottomBoundary.y + bottomBoundary.height);
+            gradientBottom.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            gradientBottom.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+            ctx.fillStyle = gradientBottom;
+            ctx.fillRect(bottomBoundary.x, bottomBoundary.y, bottomBoundary.width, bottomBoundary.height);
+
+            // Draw score
+            ctx.fillStyle = 'black';
+            ctx.font = '24px Arial'; // Larger font size for better readability
+            ctx.fillText('Score: ' + score, 20, 30);
+            ctx.fillText('Best Score: ' + bestScore, 20, 60);
+        }
+
+        function jump() {
+            if (!isGameOver) {
+                player.velocityY = JUMP_STRENGTH;
+                player.isJumping = true;
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                jump();
+            }
+        });
+
+        function gameLoop() {
+            update();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
